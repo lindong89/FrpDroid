@@ -115,7 +115,7 @@ private val GRAD_STOP: Brush get() = Brush.linearGradient(listOf(C_PRIMARY, C_AC
 // ---------- 工具函数 ----------
 
 fun savePrefs(
-    ctx: Context, addr: String, port: String, tok: String, user: String,
+    ctx: Context, addr: String, port: String, tok: String, user: String, metadatas: String,
     proxies: List<ProxyConfig>, visitors: List<ProxyConfig>,
     autoStart: Boolean, notifEnabled: Boolean, lang: String,
 ) {
@@ -125,6 +125,7 @@ fun savePrefs(
         .putString("port", port)
         .putString("tok", tok)
         .putString("user", user)
+        .putString("metadatas", metadatas)
         .putString("proxies", listToJson(proxies))
         .putString("visitors", listToJson(visitors))
         .putBoolean("auto_start", autoStart)
@@ -170,10 +171,11 @@ fun migrateServers(prefs: SharedPreferences): List<ServerConfig> {
     val port = prefs.getString("port", "7000") ?: "7000"
     val tok = prefs.getString("tok", "") ?: ""
     val user = prefs.getString("user", "") ?: ""
+    val metadatas = prefs.getString("metadatas", "") ?: ""
     val proxies = loadProxies(prefs, "proxies")
     val visitors = loadProxies(prefs, "visitors")
     val name = if (addr.isBlank()) "Server 1" else addr
-    return listOf(ServerConfig(1, name, addr, port, tok, user, proxies, visitors))
+    return listOf(ServerConfig(1, name, addr, port, tok, user, metadatas, proxies, visitors))
 }
 
 fun loadCurrentId(prefs: SharedPreferences, servers: List<ServerConfig>): Int {
@@ -185,7 +187,7 @@ fun loadCurrentId(prefs: SharedPreferences, servers: List<ServerConfig>): Int {
 // ---------- TOML 生成 ----------
 
 fun buildToml(
-    addr: String, port: String, tok: String, user: String,
+    addr: String, port: String, tok: String, user: String, metadatas: String,
     proxies: List<ProxyConfig>, visitors: List<ProxyConfig>,
 ): String {
     val sb = StringBuilder()
@@ -197,6 +199,16 @@ fun buildToml(
     }
     if (user.isNotBlank()) {
         sb.append("user = \"$user\"\n")
+    }
+    if (metadatas.isNotBlank()) {
+        val entries = metadatas.split(",").map { it.trim() }.filter { it.contains("=") }
+        if (entries.isNotEmpty()) {
+            val kv = entries.joinToString(", ") { e ->
+                val parts = e.split("=", limit = 2)
+                "\"${parts[0].trim()}\" = \"${parts[1].trim()}\""
+            }
+            sb.append("metadatas = { $kv }\n")
+        }
     }
     for (p in proxies) writeProxy(sb, p)
     for (v in visitors) writeVisitor(sb, v)
@@ -265,6 +277,8 @@ fun writeVisitor(sb: StringBuilder, v: ProxyConfig) {
     if (v.secretKey.isNotBlank()) sb.append("secretKey = \"${v.secretKey}\"\n")
     if (v.bindAddr.isNotBlank()) sb.append("bindAddr = \"${v.bindAddr}\"\n")
     if (v.bindPort.isNotBlank()) sb.append("bindPort = ${v.bindPort}\n")
+    if (v.fallbackTo.isNotBlank()) sb.append("fallbackTo = \"${v.fallbackTo}\"\n")
+    if (v.fallbackTimeoutMs.isNotBlank()) sb.append("fallbackTimeoutMs = ${v.fallbackTimeoutMs}\n")
     sb.append("keepTunnelOpen = ${v.keepTunnelOpen}\n")
 }
 
@@ -276,6 +290,7 @@ fun parseConfig(content: String): ParsedConfig? {
         var port = ""
         var tok = ""
         var user = ""
+        var meta = ""
         val proxies = ArrayList<ProxyConfig>()
         val visitors = ArrayList<ProxyConfig>()
         var inSection = ""
@@ -305,6 +320,7 @@ fun parseConfig(content: String): ParsedConfig? {
                 line.startsWith("serverPort") -> port = valueOf(line)
                 line.startsWith("auth.token") -> tok = valueOf(line)
                 line.startsWith("user") -> user = valueOf(line)
+                line.startsWith("metadatas") -> meta = parseMetadatas(valueOf(line))
                 else -> {
                     if (inSection.isEmpty()) continue
                     val kv = line.split("=", limit = 2)
@@ -337,6 +353,8 @@ fun parseConfig(content: String): ParsedConfig? {
                             "serverName" -> current.serverName = rawVal.trim('"')
                             "bindAddr" -> current.bindAddr = rawVal.trim('"')
                             "bindPort" -> current.bindPort = rawVal.trim('"')
+                            "fallbackTo" -> current.fallbackTo = rawVal.trim('"')
+                            "fallbackTimeoutMs" -> current.fallbackTimeoutMs = rawVal.trim('"')
                             "keepTunnelOpen" -> current.keepTunnelOpen = rawVal.trim().toBoolean()
                         }
                     }
@@ -346,7 +364,7 @@ fun parseConfig(content: String): ParsedConfig? {
         flushSection(inSection, current, proxies, visitors)
         if (addr.isEmpty()) return null
         if (port.isEmpty()) port = "7000"
-        return ParsedConfig(addr, port, tok, user, proxies, visitors)
+        return ParsedConfig(addr, port, tok, user, meta, proxies, visitors)
     } catch (e: Exception) {
         return null
     }
@@ -356,6 +374,29 @@ private fun valueOf(line: String): String {
     val idx = line.indexOf('=')
     if (idx < 0) return ""
     return line.substring(idx + 1).trim().trim('"')
+}
+
+/** 解析 TOML 内联表 metadatas = { "password" = "52539", "a" = "b" } → "password=52539, a=b" */
+private fun parseMetadatas(raw: String): String {
+    val inner = raw.trim().removePrefix("{").removeSuffix("}").trim()
+    if (inner.isEmpty()) return ""
+    val parts = ArrayList<String>()
+    var depth = 0
+    var cur = StringBuilder()
+    for (ch in inner) {
+        when (ch) {
+            '"', '\'' -> cur.append(ch)
+            '{' -> { depth++; cur.append(ch) }
+            '}' -> { depth--; cur.append(ch) }
+            ',' -> if (depth == 0) { parts.add(cur.toString()); cur = StringBuilder() } else cur.append(ch)
+            else -> cur.append(ch)
+        }
+    }
+    if (cur.isNotEmpty()) parts.add(cur.toString())
+    return parts.map { p ->
+        val idx = p.indexOf('=')
+        if (idx < 0) p.trim() else "${p.substring(0, idx).trim().trim('"', '\'')}=${p.substring(idx + 1).trim().trim('"', '\'')}"
+    }.joinToString(", ")
 }
 
 private fun flushSection(
@@ -633,6 +674,7 @@ fun AppMain() {
     var port by rememberSaveable { mutableStateOf(prefs.getString("port", "7000") ?: "7000") }
     var tok by rememberSaveable { mutableStateOf(prefs.getString("tok", "") ?: "") }
     var user by rememberSaveable { mutableStateOf(prefs.getString("user", "") ?: "") }
+    var meta by rememberSaveable { mutableStateOf(prefs.getString("metadatas", "") ?: "") }
     var proxies by remember { mutableStateOf(loadProxies(prefs, "proxies")) }
     var visitors by remember { mutableStateOf(loadProxies(prefs, "visitors")) }
     var autoStart by rememberSaveable { mutableStateOf(prefs.getBoolean("auto_start", false)) }
@@ -675,7 +717,7 @@ fun AppMain() {
     fun commitCurrent() {
         val c = servers.firstOrNull { it.id == currentId } ?: return
         servers = servers.map {
-            if (it.id == c.id) it.copy(addr = addr, port = port, tok = tok, user = user, proxies = proxies, visitors = visitors)
+            if (it.id == c.id) it.copy(addr = addr, port = port, tok = tok, user = user, metadatas = meta, proxies = proxies, visitors = visitors)
             else it
         }
     }
@@ -683,7 +725,7 @@ fun AppMain() {
     fun saveAll() {
         commitCurrent()
         prefs.edit().putString("servers", serversToJson(servers)).putInt("current_server", currentId).apply()
-        savePrefs(ctx, addr, port, tok, user, proxies, visitors, autoStart, notifEnabled, lang)
+        savePrefs(ctx, addr, port, tok, user, meta, proxies, visitors, autoStart, notifEnabled, lang)
     }
 
     fun switchServer(id: Int) {
@@ -691,11 +733,12 @@ fun AppMain() {
         commitCurrent()
         currentId = id
         prefs.edit().putInt("current_server", id).putString("servers", serversToJson(servers)).apply()
-        savePrefs(ctx, target.addr, target.port, target.tok, target.user, target.proxies, target.visitors, autoStart, notifEnabled, lang)
+        savePrefs(ctx, target.addr, target.port, target.tok, target.user, target.metadatas, target.proxies, target.visitors, autoStart, notifEnabled, lang)
         addr = target.addr
         port = target.port
         tok = target.tok
         user = target.user
+        meta = target.metadatas
         proxies = target.proxies
         visitors = target.visitors
     }
@@ -709,18 +752,19 @@ fun AppMain() {
             prefs.edit().putInt("current_server", currentId).apply()
         }
         val c = newList.firstOrNull { it.id == currentId } ?: newList.first()
-        savePrefs(ctx, c.addr, c.port, c.tok, c.user, c.proxies, c.visitors, autoStart, notifEnabled, lang)
+        savePrefs(ctx, c.addr, c.port, c.tok, c.user, c.metadatas, c.proxies, c.visitors, autoStart, notifEnabled, lang)
         addr = c.addr
         port = c.port
         tok = c.tok
         user = c.user
+        meta = c.metadatas
         proxies = c.proxies
         visitors = c.visitors
         prefs.edit().putString("servers", serversToJson(servers)).apply()
     }
 
     fun doExport() {
-        val toml = buildToml(addr, port, tok, user, proxies, visitors)
+        val toml = buildToml(addr, port, tok, user, meta, proxies, visitors)
         var exportPath = ""
         try {
             if (Build.VERSION.SDK_INT >= 29) {
@@ -766,9 +810,9 @@ fun AppMain() {
                     when (tab) {
                         0 -> HomeTab(t, FrpService.isRunning.collectAsState().value, addr, port, proxies, visitors, ctx, cfEnabled)
                         1 -> ConfigTab(
-                            t, addr, port, tok, user, proxies, visitors, cur?.name ?: "",
-                            onUpd = { a, p, tk, u, px ->
-                                addr = a; port = p; tok = tk; user = u; proxies = px
+                            t, addr, port, tok, user, meta, proxies, visitors, cur?.name ?: "",
+                            onUpd = { a, p, tk, u, m, px ->
+                                addr = a; port = p; tok = tk; user = u; meta = m; proxies = px
                                 saveAll()
                             },
                             onVisUpd = { vs -> visitors = vs; saveAll() },
@@ -851,7 +895,7 @@ fun AppMain() {
                 onSwitch = { id -> switchServer(id); showServer = false },
                 onNew = {
                     val newId = (servers.maxOfOrNull { it.id } ?: 0) + 1
-                    val ns = ServerConfig(newId, t.str("new_server"), "", "7000", "", "", emptyList(), emptyList())
+                    val ns = ServerConfig(newId, t.str("new_server"), "", "7000", "", "", "", emptyList(), emptyList())
                     servers = servers + ns
                     prefs.edit().putString("servers", serversToJson(servers)).apply()
                     switchServer(newId)
@@ -895,7 +939,7 @@ fun AppMain() {
                         Button(
                             onClick = {
                                 val newId = (servers.maxOfOrNull { it.id } ?: 0) + 1
-                                val ns = ServerConfig(newId, pi.addr, pi.addr, pi.port, pi.tok, pi.user, pi.proxies, pi.visitors)
+                                val ns = ServerConfig(newId, pi.addr, pi.addr, pi.port, pi.tok, pi.user, pi.metadatas, pi.proxies, pi.visitors)
                                 servers = servers + ns
                                 prefs.edit().putString("servers", serversToJson(servers)).apply()
                                 switchServer(newId)
@@ -910,7 +954,7 @@ fun AppMain() {
                         Spacer(Modifier.height(10.dp))
                         OutlinedButton(
                             onClick = {
-                                addr = pi.addr; port = pi.port; tok = pi.tok; user = pi.user
+                                addr = pi.addr; port = pi.port; tok = pi.tok; user = pi.user; meta = pi.metadatas
                                 proxies = pi.proxies; visitors = pi.visitors
                                 saveAll()
                                 pendingImport = null
@@ -1048,6 +1092,7 @@ fun HomeTab(
                                 intent.putExtra("port", (prefs.getString("port", "7000") ?: "7000").toIntOrNull() ?: 7000)
                                 intent.putExtra("tok", prefs.getString("tok", "") ?: "")
                                 intent.putExtra("user", prefs.getString("user", "") ?: "")
+                                intent.putExtra("metadatas", prefs.getString("metadatas", "") ?: "")
                                 intent.putExtra("proxies", prefs.getString("proxies", "[]") ?: "[]")
                                 intent.putExtra("notif_enabled", prefs.getBoolean("notif_enabled", true))
                                 intent.putExtra("notif_running", if ((prefs.getString("lang", "zh") ?: "zh") == "zh") "服务运行中" else "Service Running")
@@ -1275,10 +1320,10 @@ fun CloudflaredCard(t: T, ctx: Context) {
 @Composable
 fun ConfigTab(
     t: T,
-    addr: String, port: String, tok: String, user: String,
+    addr: String, port: String, tok: String, user: String, meta: String,
     proxies: List<ProxyConfig>, visitors: List<ProxyConfig>,
     serverName: String,
-    onUpd: (String, String, String, String, List<ProxyConfig>) -> Unit,
+    onUpd: (String, String, String, String, String, List<ProxyConfig>) -> Unit,
     onVisUpd: (List<ProxyConfig>) -> Unit,
     onAddP: () -> Unit,
     onAddV: () -> Unit,
@@ -1290,6 +1335,7 @@ fun ConfigTab(
     var p by rememberSaveable(port) { mutableStateOf(port) }
     var tk by rememberSaveable(tok) { mutableStateOf(tok) }
     var u by rememberSaveable(user) { mutableStateOf(user) }
+    var m by rememberSaveable(meta) { mutableStateOf(meta) }
     var px by remember(proxies) { mutableStateOf(proxies) }
     var vs by remember(visitors) { mutableStateOf(visitors) }
     var seg by rememberSaveable { mutableStateOf(0) } // 0=代理 1=访问者
@@ -1397,6 +1443,20 @@ fun ConfigTab(
                             cursorColor = C_PRIMARY,
                         ),
                     )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = m,
+                        onValueChange = { m = it },
+                        label = { Text(t.str("metadatas")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = C_PRIMARY,
+                            unfocusedBorderColor = C_STROKE,
+                            focusedLabelColor = C_PRIMARY,
+                            cursorColor = C_PRIMARY,
+                        ),
+                    )
                 }
             }
 
@@ -1405,7 +1465,7 @@ fun ConfigTab(
             // 保存按钮（放在代理卡片上方）
             Button(
                 onClick = {
-                    onUpd(a, p, tk, u, px)
+                    onUpd(a, p, tk, u, m, px)
                     Toast.makeText(ctx, t.str("saved"), Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier
@@ -1439,7 +1499,7 @@ fun ConfigTab(
                         } else {
                             px.forEach { proxy ->
                                 ProxyCard(t, proxy, onEdit = { onEditP(proxy) }, onDelete = {
-                                    onUpd(a, p, tk, u, px.filterNot { it.id == proxy.id })
+                                    onUpd(a, p, tk, u, m, px.filterNot { it.id == proxy.id })
                                 })
                             }
                         }
@@ -1857,7 +1917,11 @@ fun ProxyDialog(
     onCancel: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initial.name) }
-    var type by remember { mutableStateOf(initial.type) }
+    var type by remember {
+        mutableStateOf(
+            if (isVisitor && initial.type !in listOf("stcp", "xtcp")) "stcp" else initial.type
+        )
+    }
     var localIP by remember { mutableStateOf(initial.localIP) }
     var localPort by remember { mutableStateOf(initial.localPort) }
     var remotePort by remember { mutableStateOf(initial.remotePort) }
@@ -1867,6 +1931,8 @@ fun ProxyDialog(
     var serverName by remember { mutableStateOf(initial.serverName) }
     var bindAddr by remember { mutableStateOf(initial.bindAddr) }
     var bindPort by remember { mutableStateOf(initial.bindPort) }
+    var fallbackTo by remember { mutableStateOf(initial.fallbackTo) }
+    var fallbackTimeoutMs by remember { mutableStateOf(initial.fallbackTimeoutMs) }
     var keepTunnelOpen by remember { mutableStateOf(initial.keepTunnelOpen) }
     var pluginType by remember { mutableStateOf(initial.pluginType) }
     var unixPath by remember { mutableStateOf(initial.unixPath) }
@@ -1880,7 +1946,7 @@ fun ProxyDialog(
     var hostHeaderRewrite by remember { mutableStateOf(initial.hostHeaderRewrite) }
     var requestHeaders by remember { mutableStateOf(initial.requestHeaders) }
 
-    val types = listOf("tcp", "udp", "http", "https", "tcpmux", "stcp", "xtcp", "unix_domain_socket")
+    val types = if (isVisitor) listOf("stcp", "xtcp") else listOf("tcp", "udp", "http", "https", "tcpmux", "stcp", "xtcp", "unix_domain_socket")
 
     AlertDialog(
         onDismissRequest = onCancel,
@@ -1900,8 +1966,9 @@ fun ProxyDialog(
         text = {
             Column(
                 modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .heightIn(max = 480.dp),
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState()),
             ) {
                 DarkField(name, { name = it }, t.str("name"))
                 Spacer(Modifier.height(10.dp))
@@ -1973,6 +2040,10 @@ fun ProxyDialog(
                     DarkField(bindAddr, { bindAddr = it }, t.str("bind_addr"))
                     Spacer(Modifier.height(10.dp))
                     DarkField(bindPort, { bindPort = it }, t.str("bind_port"))
+                    Spacer(Modifier.height(10.dp))
+                    DarkField(fallbackTo, { fallbackTo = it }, t.str("fallback_to"))
+                    Spacer(Modifier.height(10.dp))
+                    DarkField(fallbackTimeoutMs, { fallbackTimeoutMs = it }, t.str("fallback_timeout"))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2035,6 +2106,8 @@ fun ProxyDialog(
                             serverName = serverName,
                             bindAddr = bindAddr,
                             bindPort = bindPort,
+                            fallbackTo = fallbackTo,
+                            fallbackTimeoutMs = fallbackTimeoutMs,
                             keepTunnelOpen = keepTunnelOpen,
                             pluginType = pluginType,
                             unixPath = unixPath,

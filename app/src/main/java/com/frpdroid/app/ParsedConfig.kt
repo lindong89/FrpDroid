@@ -6,6 +6,7 @@ data class ParsedConfig(
     val port: String,
     val tok: String,
     val user: String,
+    val metadatas: String,
     val proxies: List<ProxyConfig>,
     val visitors: List<ProxyConfig>,
 )

@@ -29,6 +29,8 @@ data class ProxyConfig(
     var serverName: String = "",
     var bindAddr: String = "127.0.0.1",
     var bindPort: String = "",
+    var fallbackTo: String = "",
+    var fallbackTimeoutMs: String = "",
     var keepTunnelOpen: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
@@ -56,6 +58,8 @@ data class ProxyConfig(
         put("serverName", serverName)
         put("bindAddr", bindAddr)
         put("bindPort", bindPort)
+        put("fallbackTo", fallbackTo)
+        put("fallbackTimeoutMs", fallbackTimeoutMs)
         put("keepTunnelOpen", keepTunnelOpen)
     }
 
@@ -85,6 +89,8 @@ data class ProxyConfig(
             serverName = o.optString("serverName", ""),
             bindAddr = o.optString("bindAddr", "127.0.0.1"),
             bindPort = o.optString("bindPort", ""),
+            fallbackTo = o.optString("fallbackTo", ""),
+            fallbackTimeoutMs = o.optString("fallbackTimeoutMs", ""),
             keepTunnelOpen = o.optBoolean("keepTunnelOpen", false),
         )
     }

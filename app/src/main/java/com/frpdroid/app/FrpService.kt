@@ -33,6 +33,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONArray
 
 class FrpService : Service() {
 
@@ -74,9 +75,10 @@ class FrpService : Service() {
                 val port = intent.getIntExtra("port", 7000)
                 val tok = intent.getStringExtra("tok") ?: ""
                 val user = intent.getStringExtra("user") ?: ""
+                val metadatas = intent.getStringExtra("metadatas") ?: ""
                 val notifRunning = intent.getStringExtra("notif_running") ?: "Service Running"
                 val notifStopped = intent.getStringExtra("notif_stopped") ?: "Stopped"
-                startFrpc(addr, port, tok, user, proxiesJson, notifEnabled, notifRunning, notifStopped)
+                startFrpc(addr, port, tok, user, metadatas, proxiesJson, notifEnabled, notifRunning, notifStopped)
             }
             ACTION_STOP -> {
                 stopFrpc()
@@ -133,7 +135,7 @@ class FrpService : Service() {
     }
 
     private fun startFrpc(
-        addr: String, port: Int, tok: String, user: String, proxiesJson: String,
+        addr: String, port: Int, tok: String, user: String, metadatas: String, proxiesJson: String,
         notifEnabled: Boolean, notifRunning: String, notifStopped: String,
     ) {
         if (_isRunning.value) {
@@ -148,7 +150,7 @@ class FrpService : Service() {
                     val confDir = File(filesDir, "conf")
                     confDir.mkdirs()
                     val configFile = File(confDir, "frpc.toml")
-                    buildConfig(configFile, addr, port, tok, user, proxiesJson)
+                    buildConfig(configFile, addr, port, tok, user, metadatas, proxiesJson)
                     _isRunning.value = true
                     Companion.log("Starting frpc...")
                     Companion.log("Config: $addr:$port")
@@ -250,7 +252,7 @@ class FrpService : Service() {
         }
     }
 
-    private fun buildConfig(f: File, addr: String, port: Int, tok: String, user: String, proxiesJson: String) {
+    private fun buildConfig(f: File, addr: String, port: Int, tok: String, user: String, metadatas: String, proxiesJson: String) {
         val sb = StringBuilder()
         sb.append("serverAddr = \"$addr\"\n")
         sb.append("serverPort = $port\n")
@@ -261,62 +263,28 @@ class FrpService : Service() {
         if (user.isNotBlank()) {
             sb.append("user = \"$user\"\n")
         }
+        if (metadatas.isNotBlank()) {
+            val entries = metadatas.split(",").map { it.trim() }.filter { it.contains("=") }
+            if (entries.isNotEmpty()) {
+                val kv = entries.joinToString(", ") { e ->
+                    val parts = e.split("=", limit = 2)
+                    "\"${parts[0].trim()}\" = \"${parts[1].trim()}\""
+                }
+                sb.append("metadatas = { $kv }\n")
+            }
+        }
         if (proxiesJson.length > 3) {
             try {
-                val trimmed = proxiesJson.trim('[', ']')
-                val entries = trimmed.split("},{")
+                val arr = JSONArray(proxiesJson)
                 val proxies = ArrayList<ProxyConfig>()
                 val visitors = ArrayList<ProxyConfig>()
-                for (entry in entries) {
-                    val clean = entry.trim('{', '}')
-                    val kvPairs = clean.split(",")
-                    val map = LinkedHashMap<String, String>()
-                    for (pair in kvPairs) {
-                        val parts = pair.split(":")
-                        if (parts.size >= 2) {
-                            val key = parts[0].trim().trim('"')
-                            val value = parts.subList(1, parts.size).joinToString(":").trim().trim('"')
-                            map[key] = value
-                        }
-                    }
-                    val name = map["name"] ?: ""
-                    if (name.isBlank()) continue
-                    val pc = ProxyConfig(
-                        name = name,
-                        type = map["type"] ?: "tcp",
-                        localIP = map["localIP"] ?: "127.0.0.1",
-                        localPort = map["localPort"] ?: "",
-                        remotePort = map["remotePort"] ?: "",
-                        isVisitor = (map["isVisitor"] ?: "false").toBoolean(),
-                    )
+                for (i in 0 until arr.length()) {
+                    val pc = ProxyConfig.fromJson(arr.getJSONObject(i))
+                    if (pc.name.isBlank()) continue
                     if (pc.isVisitor) visitors.add(pc) else proxies.add(pc)
                 }
-                for (p in proxies) {
-                    sb.append("\n")
-                    sb.append("[[proxies]]\n")
-                    sb.append("name = \"${p.name}\"\n")
-                    sb.append("type = \"${p.type}\"\n")
-                    if (p.localIP.isNotBlank() && p.type !in listOf("http", "https", "tcpmux")) {
-                        sb.append("localIP = \"${p.localIP}\"\n")
-                    }
-                    if (p.localPort.isNotBlank()) {
-                        sb.append("localPort = ${p.localPort}\n")
-                    }
-                    if (p.remotePort.isNotBlank() && p.type in listOf("tcp", "udp")) {
-                        sb.append("remotePort = ${p.remotePort}\n")
-                    }
-                }
-                for (v in visitors) {
-                    sb.append("\n")
-                    sb.append("[[visitors]]\n")
-                    sb.append("name = \"${v.name}\"\n")
-                    sb.append("type = \"${v.type}\"\n")
-                    if (v.serverName.isNotBlank()) sb.append("serverName = \"${v.serverName}\"\n")
-                    if (v.secretKey.isNotBlank()) sb.append("secretKey = \"${v.secretKey}\"\n")
-                    if (v.bindAddr.isNotBlank()) sb.append("bindAddr = \"${v.bindAddr}\"\n")
-                    if (v.bindPort.isNotBlank()) sb.append("bindPort = ${v.bindPort}\n")
-                    sb.append("keepTunnelOpen = ${v.keepTunnelOpen}\n")
-                }
+                for (p in proxies) writeProxy(sb, p)
+                for (v in visitors) writeVisitor(sb, v)
             } catch (e: Exception) {
                 Companion.log("WARN: proxy parse error: ${e.message}")
                 f.writeText(sb.toString())

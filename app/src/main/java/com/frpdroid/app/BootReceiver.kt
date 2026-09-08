@@ -22,6 +22,7 @@ class BootReceiver : BroadcastReceiver() {
                 startIntent.putExtra("port", (prefs.getString("port", "7000") ?: "7000").toIntOrNull() ?: 7000)
                 startIntent.putExtra("tok", prefs.getString("tok", "") ?: "")
                 startIntent.putExtra("user", prefs.getString("user", "") ?: "")
+                startIntent.putExtra("metadatas", prefs.getString("metadatas", "") ?: "")
                 startIntent.putExtra("proxies", prefs.getString("proxies", "[]") ?: "[]")
                 startIntent.putExtra("notif_enabled", notifEnabled)
                 startIntent.putExtra(

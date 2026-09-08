@@ -11,6 +11,7 @@ data class ServerConfig(
     val port: String = "7000",
     val tok: String = "",
     val user: String = "",
+    val metadatas: String = "",
     val proxies: List<ProxyConfig> = emptyList(),
     val visitors: List<ProxyConfig> = emptyList(),
 ) {
@@ -21,6 +22,7 @@ data class ServerConfig(
         put("port", port)
         put("tok", tok)
         put("user", user)
+        put("metadatas", metadatas)
         put("proxies", listToJson(proxies))
         put("visitors", listToJson(visitors))
     }
@@ -33,6 +35,7 @@ data class ServerConfig(
             port = o.optString("port", "7000"),
             tok = o.optString("tok", ""),
             user = o.optString("user", ""),
+            metadatas = o.optString("metadatas", ""),
             proxies = parseList(o.optString("proxies", "[]")),
             visitors = parseList(o.optString("visitors", "[]")),
         )
