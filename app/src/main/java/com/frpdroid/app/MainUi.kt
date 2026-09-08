@@ -430,16 +430,21 @@ fun formatBytes(bytes: Long): String = when {
 
 fun formatTraffic(bytes: Long, speed: Long): String = "${formatBytes(bytes)}  ·  ${formatBytes(speed)}/s"
 
+/** 代理类型 png 图标资源；无对应 png 的类型返回 null（回退 Material 图标） */
+fun proxyTypeIconRes(type: String): Int? = when (type) {
+    "tcp" -> R.drawable.ic_type_tcp
+    "udp" -> R.drawable.ic_type_udp
+    "http" -> R.drawable.ic_type_http
+    "https" -> R.drawable.ic_type_https
+    "tcpmux" -> R.drawable.ic_type_tcpmux
+    "stcp" -> R.drawable.ic_type_stcp
+    "xtcp" -> R.drawable.ic_type_xtcp
+    "unix_domain_socket" -> R.drawable.ic_type_unix
+    else -> null
+}
+
 fun proxyTypeIcon(type: String): ImageVector = when (type) {
-    "tcp" -> Icons.Outlined.SwapHoriz
-    "udp" -> Icons.Outlined.Wifi
-    "http" -> Icons.Outlined.Public
-    "https" -> Icons.Outlined.Lock
-    "tcpmux" -> Icons.Outlined.CallSplit
-    "stcp" -> Icons.Outlined.Shield
-    "xtcp" -> Icons.Outlined.Bolt
     "static_file" -> Icons.Outlined.InsertDriveFile
-    "unix_domain_socket" -> Icons.Outlined.Dns
     "https2http" -> Icons.Outlined.SyncAlt
     else -> Icons.Outlined.SwapHoriz
 }
@@ -1062,7 +1067,7 @@ fun HomeTab(
                     border = if (running) androidx.compose.foundation.BorderStroke(1.dp, C_ORANGE) else null,
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_start),
+                        painter = painterResource(if (running) R.drawable.ic_stop else R.drawable.ic_start),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -1091,7 +1096,7 @@ fun HomeTab(
             Text(t.str("traffic"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C_TEXT_MAIN)
             TextButton(onClick = { FrpService.resetTraffic(ctx) }) {
                 Image(
-                    painter = painterResource(R.drawable.ic_delete),
+                    painter = painterResource(R.drawable.ic_reset),
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                 )
@@ -1254,7 +1259,7 @@ fun CloudflaredCard(t: T, ctx: Context) {
                 ),
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_start),
+                    painter = painterResource(if (cfRunning) R.drawable.ic_stop else R.drawable.ic_start),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
@@ -1524,12 +1529,21 @@ fun ProxyCard(t: T, proxy: ProxyConfig, onEdit: () -> Unit, onDelete: () -> Unit
                     .background(proxyTypeColor(proxy.type).copy(alpha = 0.16f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    proxyTypeIcon(proxy.type),
-                    contentDescription = proxy.type,
-                    tint = proxyTypeColor(proxy.type),
-                    modifier = Modifier.size(21.dp),
-                )
+                val pngRes = proxyTypeIconRes(proxy.type)
+                if (pngRes != null) {
+                    Image(
+                        painter = painterResource(pngRes),
+                        contentDescription = proxy.type,
+                        modifier = Modifier.size(21.dp),
+                    )
+                } else {
+                    Icon(
+                        proxyTypeIcon(proxy.type),
+                        contentDescription = proxy.type,
+                        tint = proxyTypeColor(proxy.type),
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -1589,7 +1603,7 @@ fun LogTab(t: T, logs: List<String>, ls: LazyListState) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_log),
+                        painter = painterResource(R.drawable.ic_terminal),
                         contentDescription = null,
                         modifier = Modifier.size(17.dp),
                     )
@@ -1690,7 +1704,7 @@ fun SettingsTab(
                 if (cfEnabled) {
                     Divider(color = C_STROKE.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 4.dp))
                     SettingRow(
-                        icon = R.drawable.ic_cloud,
+                        icon = R.drawable.ic_cloudflare,
                         color = C_ACCENT,
                         title = t.str("auto_start_cf"),
                         checked = autoStartCf,
@@ -1707,7 +1721,7 @@ fun SettingsTab(
                 )
                 Divider(color = C_STROKE.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 4.dp))
                 SettingRow(
-                    icon = R.drawable.ic_settings,
+                    icon = if (darkTheme) R.drawable.ic_dark else R.drawable.ic_light,
                     color = C_ACCENT,
                     title = t.str("theme"),
                     checked = darkTheme,
