@@ -1873,7 +1873,6 @@ fun SettingsTab(
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(t.str("check_update"), fontSize = 15.sp, color = C_TEXT_MAIN, modifier = Modifier.weight(1f))
-                    Text("v" + appVersionName(ctx), fontSize = 13.sp, color = C_PRIMARY, fontWeight = FontWeight.Medium)
                 }
             }
         }
