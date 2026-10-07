@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -91,22 +92,22 @@ import java.util.Locale
 
 // ---------- 主题状态与配色 ----------
 object ThemePrefs {
-    var isDark by mutableStateOf(true)
+    var isDark by mutableStateOf(false)
 }
 
-private val C_BG: Color get() = if (ThemePrefs.isDark) Color(0xFF0C1119) else Color(0xFFF2F5F9)          // 主背景
-private val C_SURFACE: Color get() = if (ThemePrefs.isDark) Color(0xFF151E2E) else Color(0xFFFFFFFF)     // 卡片背景
-private val C_SURFACE_2: Color get() = if (ThemePrefs.isDark) Color(0xFF1D2A3E) else Color(0xFFE9EEF5)   // 次级卡片 / 输入框背景
-private val C_STROKE: Color get() = if (ThemePrefs.isDark) Color(0xFF27364F) else Color(0xFFD5DEE9)      // 描边
-private val C_PRIMARY: Color get() = if (ThemePrefs.isDark) Color(0xFF4D8DFF) else Color(0xFF2F6FE0)     // 品牌蓝
-private val C_PRIMARY_DEEP = Color(0xFF2E6BD6)
-private val C_ACCENT: Color get() = if (ThemePrefs.isDark) Color(0xFF8B5CF6) else Color(0xFF7C3AED)      // 品牌紫
-private val C_CYAN: Color get() = if (ThemePrefs.isDark) Color(0xFF22D3EE) else Color(0xFF0EA5E9)
-private val C_GREEN: Color get() = if (ThemePrefs.isDark) Color(0xFF34D399) else Color(0xFF10B981)
-private val C_RED: Color get() = if (ThemePrefs.isDark) Color(0xFFF87171) else Color(0xFFEF4444)
-private val C_ORANGE: Color get() = if (ThemePrefs.isDark) Color(0xFFFBBF24) else Color(0xFFF59E0B)
-private val C_TEXT_MAIN: Color get() = if (ThemePrefs.isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)   // 主文本
-private val C_TEXT: Color get() = if (ThemePrefs.isDark) Color(0xFF8B98AC) else Color(0xFF64748B)        // 次级文本
+internal val C_BG: Color get() = if (ThemePrefs.isDark) Color(0xFF0C1119) else Color(0xFFF2F5F9)          // 主背景
+internal val C_SURFACE: Color get() = if (ThemePrefs.isDark) Color(0xFF151E2E) else Color(0xFFFFFFFF)     // 卡片背景
+internal val C_SURFACE_2: Color get() = if (ThemePrefs.isDark) Color(0xFF1D2A3E) else Color(0xFFE9EEF5)   // 次级卡片 / 输入框背景
+internal val C_STROKE: Color get() = if (ThemePrefs.isDark) Color(0xFF27364F) else Color(0xFFD5DEE9)      // 描边
+internal val C_PRIMARY: Color get() = if (ThemePrefs.isDark) Color(0xFF4D8DFF) else Color(0xFF2F6FE0)     // 品牌蓝
+internal val C_PRIMARY_DEEP = Color(0xFF2E6BD6)
+internal val C_ACCENT: Color get() = if (ThemePrefs.isDark) Color(0xFF8B5CF6) else Color(0xFF7C3AED)      // 品牌紫
+internal val C_CYAN: Color get() = if (ThemePrefs.isDark) Color(0xFF22D3EE) else Color(0xFF0EA5E9)
+internal val C_GREEN: Color get() = if (ThemePrefs.isDark) Color(0xFF34D399) else Color(0xFF10B981)
+internal val C_RED: Color get() = if (ThemePrefs.isDark) Color(0xFFF87171) else Color(0xFFEF4444)
+internal val C_ORANGE: Color get() = if (ThemePrefs.isDark) Color(0xFFFBBF24) else Color(0xFFF59E0B)
+internal val C_TEXT_MAIN: Color get() = if (ThemePrefs.isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)   // 主文本
+internal val C_TEXT: Color get() = if (ThemePrefs.isDark) Color(0xFF8B98AC) else Color(0xFF64748B)        // 次级文本
 
 private val GRAD_BRAND: Brush get() = Brush.linearGradient(listOf(C_PRIMARY, C_ACCENT))
 private val GRAD_RUN: Brush get() = Brush.linearGradient(listOf(C_GREEN, C_CYAN))
@@ -680,7 +681,7 @@ fun AppMain() {
     var autoStart by rememberSaveable { mutableStateOf(prefs.getBoolean("auto_start", false)) }
     var autoStartCf by rememberSaveable { mutableStateOf(prefs.getBoolean("auto_start_cf", false)) }
     var cfEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("cf_enabled", false)) }
-    var darkTheme by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_theme", true)) }
+    var darkTheme by rememberSaveable { mutableStateOf(prefs.getBoolean("dark_theme", false)) }
     ThemePrefs.isDark = darkTheme
     var notifEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("notif_enabled", true)) }
     var lang by rememberSaveable { mutableStateOf(prefs.getString("lang", "zh") ?: "zh") }
@@ -691,6 +692,7 @@ fun AppMain() {
     var isVisitor by remember { mutableStateOf(false) }
     var proxyIsNew by remember { mutableStateOf(true) }
     var showAbout by remember { mutableStateOf(false) }
+    var showUpdate by remember { mutableStateOf(false) }
     var showServer by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<ParsedConfig?>(null) }
 
@@ -836,6 +838,7 @@ fun AppMain() {
                                 ThemePrefs.isDark = it
                                 prefs.edit().putBoolean("dark_theme", it).apply()
                             },
+                            onCheckUpdate = { showUpdate = true },
                         )
                     }
                 }
@@ -885,6 +888,10 @@ fun AppMain() {
                 cfEnabled = true
                 prefs.edit().putBoolean("cf_enabled", true).apply()
             }) { showAbout = false }
+        }
+
+        if (showUpdate) {
+            UpdateDialog(t, appVersionName(ctx)) { showUpdate = false }
         }
 
         if (showServer) {
@@ -1742,7 +1749,8 @@ fun SettingsTab(
     lang: String, onLang: (String) -> Unit,
     onAbout: () -> Unit,
     cfEnabled: Boolean = false,
-    darkTheme: Boolean = true, onDarkTheme: (Boolean) -> Unit = {},
+    darkTheme: Boolean = false, onDarkTheme: (Boolean) -> Unit = {},
+    onCheckUpdate: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     Column(
@@ -1815,29 +1823,58 @@ fun SettingsTab(
         Spacer(Modifier.height(16.dp))
 
         SectionHeader(t.str("about"))
-        // 关于：单行，点击进入关于弹窗
-        GroupCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onAbout),
-            shape = RoundedCornerShape(18.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
+        // 关于 + 检查更新
+        GroupCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Column {
+                Row(
                     modifier = Modifier
-                        .size(36.dp)
-                        .background(C_SURFACE_2, RoundedCornerShape(11.dp)),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onAbout)
+                        .padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_about),
-                        contentDescription = null,
-                        modifier = Modifier.size(19.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(C_SURFACE_2, RoundedCornerShape(11.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_about),
+                            contentDescription = null,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(t.str("about"), fontSize = 15.sp, color = C_TEXT_MAIN, modifier = Modifier.weight(1f))
+                    Text(appVersionName(ctx), fontSize = 14.sp, color = C_TEXT, fontWeight = FontWeight.Medium)
                 }
-                Spacer(Modifier.width(12.dp))
-                Text(t.str("about"), fontSize = 15.sp, color = C_TEXT_MAIN, modifier = Modifier.weight(1f))
-                Text(appVersionName(ctx), fontSize = 14.sp, color = C_TEXT, fontWeight = FontWeight.Medium)
+                Divider(color = C_STROKE.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onCheckUpdate)
+                        .padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(C_SURFACE_2, RoundedCornerShape(11.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_download),
+                            contentDescription = null,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(t.str("check_update"), fontSize = 15.sp, color = C_TEXT_MAIN, modifier = Modifier.weight(1f))
+                    Text("v" + appVersionName(ctx), fontSize = 13.sp, color = C_PRIMARY, fontWeight = FontWeight.Medium)
+                }
             }
         }
 
@@ -2180,7 +2217,20 @@ fun AboutDialog(t: T, cfEnabled: Boolean, onEnableCf: () -> Unit, onDismiss: () 
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(t.str("launcher"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(t.str("author") + ": LINDONG", fontSize = 12.sp, color = C_TEXT)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(t.str("author") + ": ", fontSize = 12.sp, color = C_TEXT)
+                            Text(
+                                "LINDONG",
+                                fontSize = 12.sp,
+                                color = C_PRIMARY,
+                                fontWeight = FontWeight.SemiBold,
+                                textDecoration = TextDecoration.Underline,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { UpdateChecker.openUrl(ctx, UpdateChecker.REPO_URL) }
+                                    .padding(horizontal = 2.dp, vertical = 1.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(14.dp))

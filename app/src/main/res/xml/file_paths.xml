@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 更新下载目录：Android/data/com.frpdroid.app/files/update/ -->
+    <external-files-path
+        name="update"
+        path="update/" />
+    <!-- 备用：内部缓存目录 -->
+    <cache-path
+        name="cache"
+        path="." />
+</paths>
