@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -622,11 +623,15 @@ fun FloatingGlassBar(
         ) {
             items.forEachIndexed { index, item ->
                 val selected = tab == index
+                // 未选中态必须用「同色 + alpha=0」，不能用 Color.Transparent（= 黑色透明）：
+                // RGBA 线性插值下 White(α.5) -> Transparent 会经过深灰，
+                // 切换页签时旧按钮背景就会闪一下（发暗）。
                 val bg by animateColorAsState(
-                    if (selected)
+                    targetValue = if (selected)
                         (if (ThemePrefs.isDark) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.5f))
                     else
-                        Color.Transparent,
+                        Color.White.copy(alpha = 0f),
+                    animationSpec = tween(durationMillis = 120),
                     label = "navBg",
                 )
                 Column(

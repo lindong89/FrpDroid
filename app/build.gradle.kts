@@ -12,8 +12,8 @@ android {
         applicationId = "com.frpdroid.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 14
-        versionName = "4.1.2"
+        versionCode = 15
+        versionName = "4.1.3"
     }
 
     buildTypes {
