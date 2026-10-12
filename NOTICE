@@ -1,0 +1,36 @@
+FrpDroid
+Copyright 2026 lindong89
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+================================================================================
+Third-party components distributed with this application
+================================================================================
+
+1. frp (fast reverse proxy) - frpc
+   Files      : app/src/main/jniLibs/arm64-v8a/libfrpc.so
+   License    : Apache License 2.0
+   Copyright  : fatedier and the frp contributors
+   Source     : https://github.com/fatedier/frp
+   License    : https://github.com/fatedier/frp/blob/dev/LICENSE
+   Note       : Unmodified official upstream release binary.
+
+2. cloudflared
+   Files      : app/src/main/jniLibs/arm64-v8a/libcloudflared.so
+   License    : Apache License 2.0
+   Copyright  : Cloudflare, Inc. and the cloudflared contributors
+   Source     : https://github.com/cloudflare/cloudflared
+   License    : https://github.com/cloudflare/cloudflared/blob/master/LICENSE
+   Note       : Unmodified official upstream release binary.
+
+3. AndroidX, Jetpack Compose, Kotlin standard library and related libraries
+   License    : Apache License 2.0
+   Copyright  : The Android Open Source Project; JetBrains s.r.o.
+   Source     : https://developer.android.com/jetpack
+                https://kotlinlang.org
+
+--------------------------------------------------------------------------------
+Both bundled native binaries (frpc and cloudflared) are redistributed unmodified,
+as published by their upstream projects, and are used under the terms of the
+Apache License, Version 2.0. The complete license text is available in the
+LICENSE file of this repository and from the upstream links listed above.

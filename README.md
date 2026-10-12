@@ -65,7 +65,9 @@ app/src/main/java/com/frpdroid/app/
 
 ## 📄 License
 
-本项目仅供学习与个人使用，具体请参考 LICENSE 文件。
+本项目基于 [Apache License 2.0](LICENSE) 开源。
+
+内置的 `frpc` 与 `cloudflared` 均为上游官方二进制，分别来自 [fatedier/frp](https://github.com/fatedier/frp) 与 [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared)，同样采用 Apache License 2.0；第三方组件的版权归属与来源声明详见 [NOTICE](NOTICE)。
 
 ---
 
